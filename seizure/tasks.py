@@ -22,6 +22,7 @@ class Task(object):
         raise NotImplementedError("Implement this")
 
     def run(self):
+        print 'filename:',self.filename()
         return self.task_core.cached_data_loader.load(self.filename(), self.load_data)
 
 
@@ -101,7 +102,6 @@ class TrainClassifierTask(Task):
         data = TrainingDataTask(self.task_core).run()
         return train_classifier(self.task_core.classifier, data, use_all_data=True, normalize=self.task_core.normalize)
 
-
 class MakePredictionsTask(Task):
     """
     Make predictions on the test data.
@@ -160,7 +160,7 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
 
     # for each data point in ictal, interictal and test,
     # generate (X, <y>, <latency>) per channel
-    def process_raw_data(mat_data, with_latency):
+    def process_raw_data(mat_data, ispreictal):
         start = time.get_seconds()
         print 'Loading data',
         X = []
@@ -176,6 +176,7 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
                     keyname = key
             
             data = segment[keyname]
+            
             # TODO:xf1280@gmail.com
             data = data[0,0]
             print(type(data))
@@ -183,40 +184,18 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
             print(data['data'])
             data = data['data']
             transformed_data = pipeline.apply(data)
-            
-            if with_latency:
-                # this is ictal
-                latency = 0#segment['latency'][0]
-                if latency <= 15:
-                    y_value = 0 # ictal <= 15
-                else:
-                    y_value = 1 # ictal > 15
+            #print 'transformed data',transformed_data
+            if ispreictal:
+                # this is preictal
+                y.append(0)
 
-                # generate extra ictal training data by taking 2nd half of previous
-                # 1-second segment and first half of current segment
-                # 0.5-1.5, 1.5-2.5, ..., 13.5-14.5, ..., 15.5-16.5
-                # cannot take half of 15 and half of 16 because it cannot be strictly labelled as early or late
-                if gen_ictal and prev_data is not None and prev_latency + 1 == latency and prev_latency != 15:
-                    # gen new data :)
-                    axis = prev_data.ndim - 1
-                    def split(d):
-                        return np.split(d, 2, axis=axis)
-                    new_data = np.concatenate((split(prev_data)[1], split(data)[0]), axis=axis)
-                    X.append(pipeline.apply(new_data))
-                    y.append(y_value)
-                    latencies.append(latency - 0.5)
-
-                y.append(y_value)
-                latencies.append(latency)
-
-                prev_latency = latency
             elif y is not None:
                 # this is interictal
-                y.append(2)
-
+                y.append(1)
+            
             X.append(transformed_data)
             prev_data = data
-
+            #print X,y
         print '(%ds)' % (time.get_seconds() - start)
 
         X = np.array(X)
@@ -224,8 +203,8 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
         latencies = np.array(latencies)
 
         if ictal:
-            print 'X', X.shape, 'y', y.shape, 'latencies', latencies.shape
-            return X, y, latencies
+            print 'X', X.shape, 'y', y.shape
+            return X, y
         elif interictal:
             print 'X', X.shape, 'y', y.shape
             return X, y
@@ -233,16 +212,8 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
             print 'X', X.shape
             return X
 
-    data = process_raw_data(mat_data, with_latency=ictal)
-
-    if len(data) == 3:
-        X, y, latencies = data
-        return {
-            'X': X,
-            'y': y,
-            'latencies': latencies
-        }
-    elif len(data) == 2:
+    data = process_raw_data(mat_data, ispreictal=ictal)
+    if len(data) == 2:
         X, y = data
         return {
             'X': X,
@@ -362,8 +333,8 @@ def split_train_ictal(X, y, latencies, cv_ratio):
 # train classifier for cross-validation
 def train(classifier, X_train, y_train, X_cv, y_cv, y_classes):
     print "Training ..."
-
     print 'Dim', 'X', np.shape(X_train), 'y', np.shape(y_train), 'X_cv', np.shape(X_cv), 'y_cv', np.shape(y_cv)
+    
     start = time.get_seconds()
     classifier.fit(X_train, y_train)
     print "Scoring..."
@@ -382,7 +353,11 @@ def train_all_data(classifier, X_train, y_train, X_cv, y_cv):
     y = np.concatenate((y_train, y_cv), axis=0)
     print 'Dim', np.shape(X), np.shape(y)
     start = time.get_seconds()
+    print "In the train"
+    print X
+    print y
     classifier.fit(X, y)
+    
     elapsedSecs = time.get_seconds() - start
     print "t=%ds" % int(elapsedSecs)
 
@@ -402,10 +377,8 @@ def train_classifier(classifier, data, use_all_data=False, normalize=False):
     y_train = data.y_train
     X_cv = data.X_cv
     y_cv = data.y_cv
-
     if normalize:
         X_train, X_cv = normalize_data(X_train, X_cv)
-
     if not use_all_data:
         score, S, E = train(classifier, X_train, y_train, X_cv, y_cv, data.y_classes)
         return {
@@ -423,39 +396,42 @@ def train_classifier(classifier, data, use_all_data=False, normalize=False):
 
 # convert the output of classifier predictions into (Seizure, Early) pair
 def translate_prediction(prediction, y_classes):
-    if len(prediction) == 3:
-        # S is 1.0 when ictal <=15 or >15
-        # S is 0.0 when interictal is highest
-        ictalLTE15, ictalGT15, interictal = prediction
-        S = ictalLTE15 + ictalGT15
-        E = ictalLTE15
-        return S, E
-    elif len(prediction) == 2:
-        # 1.0 doesn't exist for Patient_4, i.e. there is no late seizure data
-        if not np.any(y_classes == 1.0):
-            ictalLTE15, interictal = prediction
-            S = ictalLTE15
-            E = ictalLTE15
-            # y[i] = 0 # ictal <= 15
-            # y[i] = 1 # ictal > 15
-            # y[i] = 2 # interictal
-            return S, E
-        else:
-            raise NotImplementedError()
-    else:
-        raise NotImplementedError()
-
+    #print len(prediction)
+    #if len(prediction) == 3:
+    #    # S is 1.0 when ictal <=15 or >15
+    #    # S is 0.0 when interictal is highest
+    #    ictalLTE15, ictalGT15, interictal = prediction
+    #    S = ictalLTE15 + ictalGT15
+    #    E = ictalLTE15
+    #    return S, E
+    #elif len(prediction) == 2:
+    #    # 1.0 doesn't exist for Patient_4, i.e. there is no late seizure data
+    #    if not np.any(y_classes == 1.0):
+    #        ictalLTE15, interictal = prediction
+    #        S = ictalLTE15
+    #        E = ictalLTE15
+    #        # y[i] = 0 # ictal <= 15
+    #        # y[i] = 1 # ictal > 15
+    #        # y[i] = 2 # interictal
+    #        return S, E
+    #    else:
+    #        raise NotImplementedError()
+    #else:
+    #    raise NotImplementedError()
+    
+    S = prediction[0]
+    return S
 
 # use the classifier and make predictions on the test data
 def make_predictions(target, X_test, y_classes, classifier_data):
     classifier = classifier_data.classifier
     predictions_proba = classifier.predict_proba(X_test)
-
+    
     lines = []
     for i in range(len(predictions_proba)):
         p = predictions_proba[i]
-        S, E = translate_prediction(p, y_classes)
-        lines.append('%s_test_segment_%d.mat,%.15f,%.15f' % (target, i+1, S, E))
+        S = translate_prediction(p, y_classes)
+        lines.append('%s_test_segment_%d.mat,%.15f' % (target, i+1, S))
 
     return {
         'data': '\n'.join(lines)

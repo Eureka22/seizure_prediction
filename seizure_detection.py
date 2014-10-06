@@ -88,10 +88,12 @@ def run_seizure_detection(build_target):
     ]
     classifiers = [
         # NOTE(mike): you can enable multiple classifiers to run them all and compare results
-        (RandomForestClassifier(n_estimators=50, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf50mss1Bfrs0'),
+        # (RandomForestClassifier(n_estimators=50, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf50mss1Bfrs0'),
         # (RandomForestClassifier(n_estimators=150, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf150mss1Bfrs0'),
         # (RandomForestClassifier(n_estimators=300, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf300mss1Bfrs0'),
-        #(RandomForestClassifier(n_estimators=3000, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3000mss1Bfrs0'),
+        # (RandomForestClassifier(n_estimators=3000, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3000mss1Bfrs0'),
+        # (GaussianNB(),'gbn'),
+         # (SVC(),'svc'),
     ]
     cv_ratio = 0.5
 
@@ -103,7 +105,7 @@ def run_seizure_detection(build_target):
         for pipeline in pipelines:
             for (classifier, classifier_name) in classifiers:
                 print 'Using pipeline %s with classifier %s' % (pipeline.get_name(), classifier_name)
-                guesses = ['clip,seizure,early']
+                guesses = ['clip,preictal']
                 classifier_filenames = []
                 for target in targets:
                     task_core = TaskCore(cached_data_loader=cached_data_loader, data_dir=data_dir,
@@ -112,14 +114,18 @@ def run_seizure_detection(build_target):
                                          normalize=should_normalize(classifier), gen_ictal=pipeline.gen_ictal,
                                          cv_ratio=cv_ratio)
 
+                    
                     if make_predictions:
                         predictions = MakePredictionsTask(task_core).run()
                         guesses.append(predictions.data)
                     else:
                         task = TrainClassifierTask(task_core)
+                        print "training"
                         task.run()
+                        print "train_finished"
                         classifier_filenames.append(task.filename())
-
+                        
+                        
                 if make_predictions:
                     filename = 'submission%d-%s_%s.csv' % (ts, classifier_name, pipeline.get_name())
                     filename = os.path.join(submission_dir, filename)

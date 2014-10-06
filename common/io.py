@@ -15,11 +15,13 @@ def load_hkl_file(filename):
 
 def save_hkl_file(filename, data):
     hkl_filename = filename + '.hkl'
+    #print "in io,datatype",data
     try:
         hkl.dump(data, hkl_filename, mode="w")
         return True
     except Exception:
-        os.remove(hkl_filename)
+        #os.remove(hkl_filename)
+        pass
 
 
 def save_pickle_file(filename, data):
