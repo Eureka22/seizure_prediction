@@ -28,14 +28,13 @@ class FFT:
 
     def apply(self, data):
         axis = data.ndim - 1
-        
         fft = np.fft.rfft(data, axis=axis)
-        #fft2 = np.ndarray(shape=(16,200), dtype=float, order='F')
-        #for i in range(16):
-        #    for j in range(200):
-        #        fft2[i,j] = np.sum(fft[i,600*j: 600*(j+1)])
-        #return fft2
-        return fft
+        fft2 = np.ndarray(shape=(16,200), dtype=float, order='F')
+        for i in range(16):
+            for j in range(200):
+                fft2[i,j] = np.sum(fft[i,600*j: 600*(j+1)])
+        return fft2
+        #return fft
 
 class FFTAvg:
     """
@@ -46,9 +45,9 @@ class FFTAvg:
 
     def apply(self, data):
         axis = data.ndim - 1
-        
+
         fft = np.fft.rfft(data[:,0:400], axis=axis)
-        
+
 
 
 class Slice:
@@ -71,9 +70,9 @@ class Slice:
         #print data.shape
         #print 'data',data
         print 'datas',data[s]
-        
+
         return data[s]
-        
+
 
 
 class LPF:

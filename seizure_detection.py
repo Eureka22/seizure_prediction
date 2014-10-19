@@ -42,12 +42,12 @@ def run_seizure_detection(build_target):
 
     targets = [
         'Dog_1',
-#        'Dog_2',
-#        'Dog_3',
-#        'Dog_4',
-#        'Dog_5',
-#        'Patient_1',
-#        'Patient_2',
+        'Dog_2',
+        'Dog_3',
+        'Dog_4',
+        'Dog_5',
+        'Patient_1',
+        'Patient_2',
    ]
     pipelines = [
         # NOTE(mike): you can enable multiple pipelines to run them all and compare results
@@ -80,8 +80,8 @@ def run_seizure_detection(build_target):
         # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'us')]),
         # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'usf')]),
         # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'none')]),
-        
- 
+
+
     ]
     classifiers = [
         # NOTE(mike): you can enable multiple classifiers to run them all and compare results
@@ -93,7 +93,7 @@ def run_seizure_detection(build_target):
         # (BernoulliRBM(n_components=100),'dbn'),
         # (SVC(),'svc'),
          (LDA(),'lda'),
-        
+
     ]
     cv_ratio = 0.5
 
@@ -114,7 +114,7 @@ def run_seizure_detection(build_target):
                                          normalize=should_normalize(classifier), gen_ictal=False,
                                          cv_ratio=cv_ratio)
 
-                    
+
                     if make_predictions:
                         predictions = MakePredictionsTask(task_core).run()
                         guesses.append(predictions.data)
@@ -124,8 +124,8 @@ def run_seizure_detection(build_target):
                         task.run()
                         print "train_finished"
                         classifier_filenames.append(task.filename())
-                        
-                        
+
+
                 if make_predictions:
                     filename = 'submission%d-%s_%s.csv' % (ts, classifier_name, pipeline.get_name())
                     filename = os.path.join(submission_dir, filename)
