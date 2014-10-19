@@ -16,6 +16,8 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.neural_network import BernoulliRBM
+from sklearn.lda import LDA
 
 def run_seizure_detection(build_target):
     """
@@ -40,50 +42,45 @@ def run_seizure_detection(build_target):
 
     targets = [
         'Dog_1',
-#       'Dog_2',
-#       'Dog_3',
-#       'Dog_4',
-#       'Patient_1',
-#       'Patient_2',
-#       'Patient_3',
-#       'Patient_4',
-#       'Patient_5',
-#       'Patient_6',
-#       'Patient_7',
-#       'Patient_8'
-    ]
+#        'Dog_2',
+#        'Dog_3',
+#        'Dog_4',
+#        'Dog_5',
+#        'Patient_1',
+#        'Patient_2',
+   ]
     pipelines = [
         # NOTE(mike): you can enable multiple pipelines to run them all and compare results
-        Pipeline(gen_ictal=False, pipeline=[FFT(), Slice(1, 48), Magnitude(), Log10()]),
-        # Pipeline(gen_ictal=False, pipeline=[FFT(), Slice(1, 64), Magnitude(), Log10()]),
-        # Pipeline(gen_ictal=False, pipeline=[FFT(), Slice(1, 96), Magnitude(), Log10()]),
-        # Pipeline(gen_ictal=False, pipeline=[FFT(), Slice(1, 128), Magnitude(), Log10()]),
-        # Pipeline(gen_ictal=False, pipeline=[FFT(), Slice(1, 160), Magnitude(), Log10()]),
-        # Pipeline(gen_ictal=False, pipeline=[FFT(), Magnitude(), Log10()]),
-        # Pipeline(gen_ictal=False, pipeline=[Stats()]),
-        # Pipeline(gen_ictal=False, pipeline=[DaubWaveletStats(4)]),
-        # Pipeline(gen_ictal=False, pipeline=[Resample(400), DaubWaveletStats(4)]),
-        # Pipeline(gen_ictal=False, pipeline=[Resample(400), MFCC()]),
-        # Pipeline(gen_ictal=False, pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
-        # Pipeline(gen_ictal=True,  pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
-        # Pipeline(gen_ictal=False, pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # winning submission
-        # Pipeline(gen_ictal=True,  pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # higher score than winning submission
-        # Pipeline(gen_ictal=False, pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'none')]),
-        # Pipeline(gen_ictal=True,  pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'none')]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeCorrelation(400, 'usf', with_corr=True, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeCorrelation(400, 'us', with_corr=True, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeCorrelation(400, 'us', with_corr=True, with_eigen=False)]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeCorrelation(400, 'us', with_corr=False, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeCorrelation(400, 'none', with_corr=True, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[FreqCorrelation(1, 48, 'usf', with_corr=True, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[FreqCorrelation(1, 48, 'us', with_corr=True, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[FreqCorrelation(1, 48, 'us', with_corr=True, with_eigen=False)]),
-        # Pipeline(gen_ictal=False, pipeline=[FreqCorrelation(1, 48, 'us', with_corr=False, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[FreqCorrelation(1, 48, 'none', with_corr=True, with_eigen=True)]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeFreqCorrelation(1, 48, 400, 'us')]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeFreqCorrelation(1, 48, 400, 'usf')]),
-        # Pipeline(gen_ictal=False, pipeline=[TimeFreqCorrelation(1, 48, 400, 'none')]),
-        
+        # Pipeline(pipeline=[FFT(), Slice(1, 48), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[FFT(), Slice(1, 64), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[FFT(), Slice(1, 96), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[FFT(), Slice(1, 128), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[FFT(), Slice(1, 160), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[FFT(), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[Stats()]),
+        # Pipeline(pipeline=[DaubWaveletStats(4)]),
+        # Pipeline(pipeline=[Resample(400), DaubWaveletStats(4)]),
+        # Pipeline(pipeline=[Resample(400), MFCC()]),
+         Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
+        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
+        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # winning submission
+        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # higher score than winning submission
+        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'none')]),
+        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'none')]),
+        # Pipeline(pipeline=[TimeCorrelation(400, 'usf', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[TimeCorrelation(400, 'us', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[TimeCorrelation(400, 'us', with_corr=True, with_eigen=False)]),
+        # Pipeline(pipeline=[TimeCorrelation(400, 'us', with_corr=False, with_eigen=True)]),
+        # Pipeline(pipeline=[TimeCorrelation(400, 'none', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[FreqCorrelation(1, 48, 'usf', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[FreqCorrelation(1, 48, 'us', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[FreqCorrelation(1, 48, 'us', with_corr=True, with_eigen=False)]),
+        # Pipeline(pipeline=[FreqCorrelation(1, 48, 'us', with_corr=False, with_eigen=True)]),
+        # Pipeline(pipeline=[FreqCorrelation(1, 48, 'none', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'us')]),
+        # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'usf')]),
+        # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'none')]),
+        # 调隐层数目和每个隐层的节点书目 theanoon
  
     ]
     classifiers = [
@@ -93,7 +90,10 @@ def run_seizure_detection(build_target):
         # (RandomForestClassifier(n_estimators=300, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf300mss1Bfrs0'),
         # (RandomForestClassifier(n_estimators=3000, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3000mss1Bfrs0'),
         # (GaussianNB(),'gbn'),
-         # (SVC(),'svc'),
+        # (BernoulliRBM(n_components=100),'dbn'),
+        # (SVC(),'svc'),
+         (LDA(),'lda'),
+        
     ]
     cv_ratio = 0.5
 
@@ -111,7 +111,7 @@ def run_seizure_detection(build_target):
                     task_core = TaskCore(cached_data_loader=cached_data_loader, data_dir=data_dir,
                                          target=target, pipeline=pipeline,
                                          classifier_name=classifier_name, classifier=classifier,
-                                         normalize=should_normalize(classifier), gen_ictal=pipeline.gen_ictal,
+                                         normalize=should_normalize(classifier), gen_ictal=False,
                                          cv_ratio=cv_ratio)
 
                     

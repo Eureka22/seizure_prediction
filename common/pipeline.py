@@ -7,12 +7,9 @@ class Pipeline(object):
 
     pipeline: List of transforms to apply one by one to the input data
     """
-    def __init__(self, gen_ictal, pipeline):
+    def __init__(self, pipeline):
         self.transforms = pipeline
-        self.gen_ictal = gen_ictal
         names = [t.get_name() for t in self.transforms]
-        if gen_ictal:
-            names = ['gen'] + names
         self.name = 'empty' if len(names) == 0 else '_'.join(names)
 
     def get_name(self):

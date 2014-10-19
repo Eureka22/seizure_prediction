@@ -187,11 +187,11 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
             #print 'transformed data',transformed_data
             if ispreictal:
                 # this is preictal
-                y.append(0)
+                y.append(1)
 
             elif y is not None:
                 # this is interictal
-                y.append(1)
+                y.append(0)
             
             X.append(transformed_data)
             prev_data = data
@@ -241,7 +241,7 @@ def prepare_training_data(ictal_data, interictal_data, cv_ratio):
     interictal_X, interictal_y = flatten(interictal_data.X), interictal_data.y
 
     # split up data into training set and cross-validation set for both seizure and early sets
-    ictal_X_train, ictal_y_train, ictal_X_cv, ictal_y_cv = split_train_ictal(ictal_X, ictal_y, ictal_data.latencies, cv_ratio)
+    ictal_X_train, ictal_y_train, ictal_X_cv, ictal_y_cv = split_train_random(ictal_X, ictal_y, cv_ratio)
     interictal_X_train, interictal_y_train, interictal_X_cv, interictal_y_cv = split_train_random(interictal_X, interictal_y, cv_ratio)
 
     def concat(a, b):
@@ -280,54 +280,54 @@ def split_train_random(X, y, cv_ratio):
 
 
 # split ictal segments for training and cross-validation by taking whole seizures at a time
-def split_train_ictal(X, y, latencies, cv_ratio):
-    seizure_ranges = seizure_ranges_for_latencies(latencies)
-    seizure_durations = [r[1] - r[0] for r in seizure_ranges]
-
-    num_seizures = len(seizure_ranges)
-    num_cv_seizures = int(max(1.0, num_seizures * cv_ratio))
-
-    # sort seizures by biggest duration first, then take the middle chunk for cross-validation
-    # and take the left and right chunks for training
-    tagged_durations = zip(range(len(seizure_durations)), seizure_durations)
-    tagged_durations.sort(cmp=lambda x,y: cmp(y[1], x[1]))
-    middle = num_seizures / 2
-    half_cv_seizures = num_cv_seizures / 2
-    start = middle - half_cv_seizures
-    end = start + num_cv_seizures
-
-    chosen = tagged_durations[start:end]
-    chosen.sort(cmp=lambda x,y: cmp(x[0], y[0]))
-    cv_ranges = [seizure_ranges[r[0]] for r in chosen]
-
-    train_ranges = []
-    prev_end = 0
-    for start, end in cv_ranges:
-        train_start = prev_end
-        train_end = start
-
-        if train_start != train_end:
-            train_ranges.append((train_start, train_end))
-
-        prev_end = end
-
-    train_start = prev_end
-    train_end = len(latencies)
-    if train_start != train_end:
-        train_ranges.append((train_start, train_end))
-
-    X_train_chunks = [X[start:end] for start, end in train_ranges]
-    y_train_chunks = [y[start:end] for start, end in train_ranges]
-
-    X_cv_chunks = [X[start:end] for start, end in cv_ranges]
-    y_cv_chunks = [y[start:end] for start, end in cv_ranges]
-
-    X_train = np.concatenate(X_train_chunks)
-    y_train = np.concatenate(y_train_chunks)
-    X_cv = np.concatenate(X_cv_chunks)
-    y_cv = np.concatenate(y_cv_chunks)
-
-    return X_train, y_train, X_cv, y_cv
+#def split_train_ictal(X, y,  cv_ratio):
+#    #seizure_ranges = seizure_ranges_for_latencies(latencies)
+#    #seizure_durations = [r[1] - r[0] for r in seizure_ranges]
+#
+#    num_seizures = len(seizure_ranges)
+#    num_cv_seizures = int(max(1.0, num_seizures * cv_ratio))
+#
+#    # sort seizures by biggest duration first, then take the middle chunk for cross-validation
+#    # and take the left and right chunks for training
+#    tagged_durations = zip(range(len(seizure_durations)), seizure_durations)
+#    tagged_durations.sort(cmp=lambda x,y: cmp(y[1], x[1]))
+#    middle = num_seizures / 2
+#    half_cv_seizures = num_cv_seizures / 2
+#    start = middle - half_cv_seizures
+#    end = start + num_cv_seizures
+#
+#    chosen = tagged_durations[start:end]
+#    chosen.sort(cmp=lambda x,y: cmp(x[0], y[0]))
+#    cv_ranges = [seizure_ranges[r[0]] for r in chosen]
+#
+#    train_ranges = []
+#    prev_end = 0
+#    for start, end in cv_ranges:
+#        train_start = prev_end
+#        train_end = start
+#
+#        if train_start != train_end:
+#            train_ranges.append((train_start, train_end))
+#
+#        prev_end = end
+#
+#    train_start = prev_end
+#    train_end = len(latencies)
+#    if train_start != train_end:
+#        train_ranges.append((train_start, train_end))
+#
+#    X_train_chunks = [X[start:end] for start, end in train_ranges]
+#    y_train_chunks = [y[start:end] for start, end in train_ranges]
+#
+#    X_cv_chunks = [X[start:end] for start, end in cv_ranges]
+#    y_cv_chunks = [y[start:end] for start, end in cv_ranges]
+#
+#    X_train = np.concatenate(X_train_chunks)
+#    y_train = np.concatenate(y_train_chunks)
+#    X_cv = np.concatenate(X_cv_chunks)
+#    y_cv = np.concatenate(y_cv_chunks)
+#
+#    return X_train, y_train, X_cv, y_cv
 
 
 # train classifier for cross-validation
