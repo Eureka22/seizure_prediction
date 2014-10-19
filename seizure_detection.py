@@ -80,7 +80,7 @@ def run_seizure_detection(build_target):
         # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'us')]),
         # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'usf')]),
         # Pipeline(pipeline=[TimeFreqCorrelation(1, 48, 400, 'none')]),
-        # 调隐层数目和每个隐层的节点书目 theanoon
+        
  
     ]
     classifiers = [

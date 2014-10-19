@@ -32,9 +32,9 @@ class CachedDataLoader:
         if filename is not None:
             filename = os.path.join(self.dir, filename)
             
-            data = io.load_hkl_file(filename)
-            if data is not None:
-                return wrap_data(data)
+       #     data = io.load_hkl_file(filename)
+       #     if data is not None:
+       #         return wrap_data(data)
 
             data = io.load_pickle_file(filename)
             if data is not None:
@@ -45,7 +45,7 @@ class CachedDataLoader:
         print "data type:",data
         
         if filename is not None:
-            if io.save_hkl_file(filename, data):
-                return wrap_data(data)
+            #if io.save_hkl_file(filename, data):
+            #    return wrap_data(data)
             io.save_pickle_file(filename, data)
         return wrap_data(data)

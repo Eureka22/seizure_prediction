@@ -1,27 +1,27 @@
 import os
-import hickle as hkl
+#import hickle as hkl
 import pickle
 import common.time as time
 
-def load_hkl_file(filename):
-    hkl_filename = filename + '.hkl'
-    if os.path.isfile(hkl_filename):
-        start = time.get_seconds()
-        data = hkl.load(hkl_filename)
-        print 'Loaded %s in %ds' % (hkl_filename, time.get_seconds() - start)
-        return data
-    return None
-
-
-def save_hkl_file(filename, data):
-    hkl_filename = filename + '.hkl'
-    #print "in io,datatype",data
-    try:
-        hkl.dump(data, hkl_filename, mode="w")
-        return True
-    except Exception:
-        #os.remove(hkl_filename)
-        pass
+#def load_hkl_file(filename):
+#    hkl_filename = filename + '.hkl'
+#    if os.path.isfile(hkl_filename):
+#        start = time.get_seconds()
+#        data = hkl.load(hkl_filename)
+#        print 'Loaded %s in %ds' % (hkl_filename, time.get_seconds() - start)
+#        return data
+#    return None
+#
+#
+#def save_hkl_file(filename, data):
+#    hkl_filename = filename + '.hkl'
+#    #print "in io,datatype",data
+#    try:
+#        hkl.dump(data, hkl_filename, mode="w")
+#        return True
+#    except Exception:
+#        #os.remove(hkl_filename)
+#        pass
 
 
 def save_pickle_file(filename, data):
