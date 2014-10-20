@@ -166,22 +166,22 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
         X = []
         y = []
         latencies = []
-        
+
         prev_data = None
         prev_latency = None
         for segment in mat_data:
-            
+
             for key in segment.keys():
                 if (key.find('segment')>0):
                     keyname = key
-            
+
             data = segment[keyname]
-            
+
             # TODO:xf1280@gmail.com
             data = data[0,0]
             print(type(data))
             print(data.dtype)
-            print(data['data'])
+            #print(data['data'])
             data = data['data']
             transformed_data = pipeline.apply(data)
             #print 'transformed data',transformed_data
@@ -192,7 +192,7 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
             elif y is not None:
                 # this is interictal
                 y.append(0)
-            
+
             X.append(transformed_data)
             prev_data = data
             #print X,y
@@ -334,16 +334,16 @@ def split_train_random(X, y, cv_ratio):
 def train(classifier, X_train, y_train, X_cv, y_cv, y_classes):
     print "Training ..."
     print 'Dim', 'X', np.shape(X_train), 'y', np.shape(y_train), 'X_cv', np.shape(X_cv), 'y_cv', np.shape(y_cv)
-    
+
     start = time.get_seconds()
     classifier.fit(X_train, y_train)
     print "Scoring..."
-    S, E = score_classifier_auc(classifier, X_cv, y_cv, y_classes)
-    score = 0.5 * (S + E)
+    S= score_classifier_auc(classifier, X_cv, y_cv, y_classes)
+    score = S
 
     elapsedSecs = time.get_seconds() - start
     print "t=%ds score=%f" % (int(elapsedSecs), score)
-    return score, S, E
+    return score, S
 
 
 # train classifier for predictions
@@ -357,7 +357,7 @@ def train_all_data(classifier, X_train, y_train, X_cv, y_cv):
     print X
     print y
     classifier.fit(X, y)
-    
+
     elapsedSecs = time.get_seconds() - start
     print "t=%ds" % int(elapsedSecs)
 
@@ -380,12 +380,11 @@ def train_classifier(classifier, data, use_all_data=False, normalize=False):
     if normalize:
         X_train, X_cv = normalize_data(X_train, X_cv)
     if not use_all_data:
-        score, S, E = train(classifier, X_train, y_train, X_cv, y_cv, data.y_classes)
+        score, S = train(classifier, X_train, y_train, X_cv, y_cv, data.y_classes)
         return {
             'classifier': classifier,
             'score': score,
             'S_auc': S,
-            'E_auc': E
         }
     else:
         train_all_data(classifier, X_train, y_train, X_cv, y_cv)
@@ -418,7 +417,7 @@ def translate_prediction(prediction, y_classes):
     #        raise NotImplementedError()
     #else:
     #    raise NotImplementedError()
-    
+
     S = prediction[0]
     return S
 
@@ -426,7 +425,7 @@ def translate_prediction(prediction, y_classes):
 def make_predictions(target, X_test, y_classes, classifier_data):
     classifier = classifier_data.classifier
     predictions_proba = classifier.predict_proba(X_test)
-    
+
     lines = []
     for i in range(len(predictions_proba)):
         p = predictions_proba[i]
@@ -442,20 +441,15 @@ def make_predictions(target, X_test, y_classes, classifier_data):
 def score_classifier_auc(classifier, X_cv, y_cv, y_classes):
     predictions = classifier.predict_proba(X_cv)
     S_predictions = []
-    E_predictions = []
-    S_y_cv = [1.0 if (x == 0.0 or x == 1.0) else 0.0 for x in y_cv]
-    E_y_cv = [1.0 if x == 0.0 else 0.0 for x in y_cv]
+    S_y_cv =  y_cv
 
     for i in range(len(predictions)):
         p = predictions[i]
-        S, E = translate_prediction(p, y_classes)
+        print p
+        S= translate_prediction(p, y_classes)
         S_predictions.append(S)
-        E_predictions.append(E)
 
     fpr, tpr, thresholds = roc_curve(S_y_cv, S_predictions)
     S_roc_auc = auc(fpr, tpr)
-    fpr, tpr, thresholds = roc_curve(E_y_cv, E_predictions)
-    E_roc_auc = auc(fpr, tpr)
-
-    return S_roc_auc, E_roc_auc
+    return S_roc_auc
 

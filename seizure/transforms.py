@@ -36,6 +36,28 @@ class FFT:
         return fft2
         #return fft
 
+class RFFT:
+    """
+    Apply FFT to the last axis
+    """
+    def get_name(self):
+        return "rfft"
+    def apply(self,data):
+        axis = data.ndim - 1
+        sz = data.shape
+        print sz
+        sz2 = sz[1] - (sz[1]%400)
+        print sz2
+        data = data[:,0:sz2]
+        sz = data.shape
+        newsz = (sz[0],400,sz[1]//400)
+        print newsz
+        data = data.reshape(newsz)
+        data = data.mean(axis=1)
+        print data.shape
+        fft = np.fft.rfft(data,axis = axis)
+        return fft
+
 class FFTAvg:
     """
     Apply Fast Fourier Transform to the last axis.
@@ -45,10 +67,7 @@ class FFTAvg:
 
     def apply(self, data):
         axis = data.ndim - 1
-
         fft = np.fft.rfft(data[:,0:400], axis=axis)
-
-
 
 class Slice:
     """
@@ -63,14 +82,8 @@ class Slice:
         return "slice%d-%d" % (self.start, self.end)
 
     def apply(self, data):
-        #ntimes = 600
         s = [slice(None),] * data.ndim
         s[-1] = slice(self.start, self.end)
-        #print 's',s
-        #print data.shape
-        #print 'data',data
-        print 'datas',data[s]
-
         return data[s]
 
 

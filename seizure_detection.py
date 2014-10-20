@@ -4,7 +4,7 @@ import numpy as np
 from common import time
 from common.data import CachedDataLoader, makedirs
 from common.pipeline import Pipeline
-from seizure.transforms import FFT, Slice, Magnitude, Log10, FFTWithTimeFreqCorrelation, MFCC, Resample, Stats, \
+from seizure.transforms import RFFT, FFT, Slice, Magnitude, Log10, FFTWithTimeFreqCorrelation, MFCC, Resample, Stats, \
     DaubWaveletStats, TimeCorrelation, FreqCorrelation, TimeFreqCorrelation
 from seizure.tasks import TaskCore, CrossValidationScoreTask, MakePredictionsTask, TrainClassifierTask
 from seizure.scores import get_score_summary, print_results
@@ -46,13 +46,14 @@ def run_seizure_detection(build_target):
         'Dog_3',
         'Dog_4',
         'Dog_5',
-        'Patient_1',
-        'Patient_2',
+        'Patient_1_downsample',
+        'Patient_2_downsample',
    ]
     pipelines = [
         # NOTE(mike): you can enable multiple pipelines to run them all and compare results
-        # Pipeline(pipeline=[FFT(), Slice(1, 48), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 64), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[FFT(), Slice(1, 48), Magnitude(), Log10()]),
+         Pipeline(pipeline=[RFFT(), Slice(1, 48), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 96), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 128), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 160), Magnitude(), Log10()]),
@@ -61,7 +62,7 @@ def run_seizure_detection(build_target):
         # Pipeline(pipeline=[DaubWaveletStats(4)]),
         # Pipeline(pipeline=[Resample(400), DaubWaveletStats(4)]),
         # Pipeline(pipeline=[Resample(400), MFCC()]),
-         Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
+        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
         # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
         # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # winning submission
         # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # higher score than winning submission
@@ -151,7 +152,7 @@ def run_seizure_detection(build_target):
                     task_core = TaskCore(cached_data_loader=cached_data_loader, data_dir=data_dir,
                                          target=target, pipeline=pipeline,
                                          classifier_name=classifier_name, classifier=classifier,
-                                         normalize=should_normalize(classifier), gen_ictal=pipeline.gen_ictal,
+                                         normalize=should_normalize(classifier), gen_ictal=False,
                                          cv_ratio=cv_ratio)
 
                     data = CrossValidationScoreTask(task_core).run()
@@ -159,9 +160,8 @@ def run_seizure_detection(build_target):
 
                     scores.append(score)
 
-                    print '%.3f' % score, 'S=%.4f' % data.S_auc, 'E=%.4f' % data.E_auc
+                    print '%.3f' % score, 'S=%.4f' % data.S_auc
                     S_scores.append(data.S_auc)
-                    E_scores.append(data.E_auc)
 
                 if len(scores) > 0:
                     name = pipeline.get_name() + '_' + classifier_name
@@ -172,10 +172,6 @@ def run_seizure_detection(build_target):
                     name = pipeline.get_name() + '_' + classifier_name
                     summary = get_score_summary(name, S_scores)
                     print 'S', summary
-                if len(E_scores) > 0:
-                    name = pipeline.get_name() + '_' + classifier_name
-                    summary = get_score_summary(name, E_scores)
-                    print 'E', summary
 
             print_results(summaries)
 
