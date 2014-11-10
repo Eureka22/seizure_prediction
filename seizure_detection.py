@@ -4,9 +4,10 @@ import numpy as np
 from common import time
 from common.data import CachedDataLoader, makedirs
 from common.pipeline import Pipeline
-from seizure.transforms import RFFT, FFT, Slice, Magnitude, Log10, FFTWithTimeFreqCorrelation, MFCC, Resample, Stats, \
+from seizure.transforms import TimeAliasing,RFFT, FFT, Slice, Magnitude, Log10, FFTWithTimeFreqCorrelation, MFCC, Resample, Stats, \
     DaubWaveletStats, TimeCorrelation, FreqCorrelation, TimeFreqCorrelation
-from seizure.tasks import TaskCore, CrossValidationScoreTask, MakePredictionsTask, TrainClassifierTask
+from seizure.tasks import TaskCore, CrossValidationScoreTask, MakePredictionsTask, TrainClassifierTask, TrainClassifierwithCalibTask, MakePredictionswithCalibTask
+
 from seizure.scores import get_score_summary, print_results
 
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, ExtraTreesClassifier, \
@@ -18,7 +19,7 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import BernoulliRBM
 from sklearn.lda import LDA
-
+from mail import send_message
 def run_seizure_detection(build_target):
     """
     The main entry point for running seizure-detection cross-validation and predictions.
@@ -53,27 +54,29 @@ def run_seizure_detection(build_target):
         # NOTE(mike): you can enable multiple pipelines to run them all and compare results
         # Pipeline(pipeline=[FFT(), Slice(1, 64), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 48), Magnitude(), Log10()]),
-         Pipeline(pipeline=[RFFT(), Slice(1, 48), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 96), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[RFFT(), Slice(1, 48), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 128), Magnitude(), Log10()]),
+         Pipeline(pipeline=[TimeAliasing(),FFT(), Slice(1, 48), Magnitude(), Log10()]),
+        # Pipeline(pipeline=[TimeAliasing(),FFT(), Slice(1, 64), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Slice(1, 160), Magnitude(), Log10()]),
         # Pipeline(pipeline=[FFT(), Magnitude(), Log10()]),
         # Pipeline(pipeline=[Stats()]),
         # Pipeline(pipeline=[DaubWaveletStats(4)]),
         # Pipeline(pipeline=[Resample(400), DaubWaveletStats(4)]),
         # Pipeline(pipeline=[Resample(400), MFCC()]),
+        # Pipeline(pipeline=[TimeAliasing(),FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
         # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
-        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'us')]),
-        # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # winning submission
+        # Pipeline(pipeline=[TimeAliasing(),FFTWithTimeFreqCorrelation(1, 48, 400, 'none')]), # winning submission
         # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'usf')]), # higher score than winning submission
         # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'none')]),
         # Pipeline(pipeline=[FFTWithTimeFreqCorrelation(1, 48, 400, 'none')]),
-        # Pipeline(pipeline=[TimeCorrelation(400, 'usf', with_corr=True, with_eigen=True)]),
-        # Pipeline(pipeline=[TimeCorrelation(400, 'us', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[TimeAliasing(),TimeCorrelation(400, 'usf', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[TimeAliasing(),TimeCorrelation(400, 'us', with_corr=True, with_eigen=True)]),
         # Pipeline(pipeline=[TimeCorrelation(400, 'us', with_corr=True, with_eigen=False)]),
         # Pipeline(pipeline=[TimeCorrelation(400, 'us', with_corr=False, with_eigen=True)]),
         # Pipeline(pipeline=[TimeCorrelation(400, 'none', with_corr=True, with_eigen=True)]),
-        # Pipeline(pipeline=[FreqCorrelation(1, 48, 'usf', with_corr=True, with_eigen=True)]),
+        # Pipeline(pipeline=[TimeAliasing(),FreqCorrelation(1, 48, 'usf', with_corr=True, with_eigen=True,with_fft = True)]),
         # Pipeline(pipeline=[FreqCorrelation(1, 48, 'us', with_corr=True, with_eigen=True)]),
         # Pipeline(pipeline=[FreqCorrelation(1, 48, 'us', with_corr=True, with_eigen=False)]),
         # Pipeline(pipeline=[FreqCorrelation(1, 48, 'us', with_corr=False, with_eigen=True)]),
@@ -89,14 +92,14 @@ def run_seizure_detection(build_target):
         # (RandomForestClassifier(n_estimators=50, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf50mss1Bfrs0'),
         # (RandomForestClassifier(n_estimators=150, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf150mss1Bfrs0'),
         # (RandomForestClassifier(n_estimators=300, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf300mss1Bfrs0'),
-        # (RandomForestClassifier(n_estimators=3000, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3000mss1Bfrs0'),
+         (RandomForestClassifier(n_estimators=3000, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3000mss1Bfrs0'),
         # (GaussianNB(),'gbn'),
         # (BernoulliRBM(n_components=100),'dbn'),
         # (SVC(),'svc'),
-         (LDA(),'lda'),
+        # (LDA(),'lda'),
 
     ]
-    cv_ratio = 0.5
+    cv_ratio = 0.25
 
     def should_normalize(classifier):
         clazzes = [LogisticRegression]
@@ -137,6 +140,50 @@ def run_seizure_detection(build_target):
                     print 'Trained classifiers ready in %s' % cache_dir
                     for filename in classifier_filenames:
                         print os.path.join(cache_dir, filename + '.pickle')
+
+
+
+
+    def train_model_with_calib(make_predictions):
+        for pipeline in pipelines:
+            for (classifier, classifier_name) in classifiers:
+                print 'Using pipeline %s with classifier %s' % (pipeline.get_name(), classifier_name)
+                guesses = ['clip,preictal']
+                classifier_filenames = []
+                for target in targets:
+                    task_core = TaskCore(cached_data_loader=cached_data_loader, data_dir=data_dir,
+                                         target=target, pipeline=pipeline,
+                                         classifier_name=classifier_name, classifier=classifier,
+                                         normalize=should_normalize(classifier), gen_ictal=False,
+                                         cv_ratio=cv_ratio)
+
+
+                    if make_predictions:
+                        predictions = MakePredictionswithCalibTask(task_core).run()
+                        guesses.append(predictions.data)
+                    else:
+                        task = TrainClassifierwithCalibTask(task_core)
+                        print "training"
+                        task.run()
+                        print "train_finished"
+                        classifier_filenames.append(task.filename())
+
+
+                if make_predictions:
+                    filename = 'submission%d-%s_%s.csv' % (ts, classifier_name, pipeline.get_name())
+                    filename = os.path.join(submission_dir, filename)
+                    with open(filename, 'w') as f:
+                        print >> f, '\n'.join(guesses)
+                    print 'wrote', filename
+                else:
+                    print 'Trained classifiers ready in %s' % cache_dir
+                    for filename in classifier_filenames:
+                        print os.path.join(cache_dir, filename + '.pickle')
+
+
+
+
+
 
     def do_cross_validation():
         summaries = []
@@ -181,5 +228,9 @@ def run_seizure_detection(build_target):
         train_full_model(make_predictions=False)
     elif build_target == 'make_predictions':
         train_full_model(make_predictions=True)
+    elif build_target == 'make_predictions_with_calib':
+        train_model_with_calib(make_predictions = True)
     else:
         raise Exception("unknown build target %s" % build_target)
+
+    send_message('your program finished running on mercury')

@@ -5,7 +5,10 @@ import scipy.io
 import common.time as time
 from sklearn import cross_validation, preprocessing
 from sklearn.metrics import roc_curve, auc
+import random
+from sklearn.isotonic import IsotonicRegression as IR
 
+drate = 100
 TaskCore = namedtuple('TaskCore', ['cached_data_loader', 'data_dir', 'target', 'pipeline', 'classifier_name',
                                    'classifier', 'normalize', 'gen_ictal', 'cv_ratio'])
 
@@ -102,6 +105,21 @@ class TrainClassifierTask(Task):
         data = TrainingDataTask(self.task_core).run()
         return train_classifier(self.task_core.classifier, data, use_all_data=True, normalize=self.task_core.normalize)
 
+
+class TrainClassifierwithCalibTask(Task):
+    """
+    Run a classifier over the complete data set (training data + cross-validation data combined)
+    and save the trained models.
+    """
+    def filename(self):
+        return 'classifier_%s_%s_%s' % (self.task_core.target, self.task_core.pipeline.get_name(), self.task_core.classifier_name)
+
+    def load_data(self):
+        data = TrainingDataTask(self.task_core).run()
+        return train_classifier_with_calib(self.task_core.classifier, data, use_all_data=False, normalize=self.task_core.normalize)
+
+
+
 class MakePredictionsTask(Task):
     """
     Make predictions on the test data.
@@ -119,6 +137,28 @@ class MakePredictionsTask(Task):
         X_test = flatten(test_data.X)
 
         return make_predictions(self.task_core.target, X_test, y_classes, classifier_data)
+
+
+class MakePredictionswithCalibTask(Task):
+    """
+    Make predictions on the test data.
+    """
+    def filename(self):
+        return 'predictions_%s_%s_%s' % (self.task_core.target, self.task_core.pipeline.get_name(), self.task_core.classifier_name)
+
+    def load_data(self):
+        data = TrainingDataTask(self.task_core).run()
+        y_classes = data.y_classes
+        del data
+
+        classifier_data = TrainClassifierwithCalibTask(self.task_core).run()
+        test_data = LoadTestDataTask(self.task_core).run()
+        X_test = flatten(test_data.X)
+
+        return make_predictions_with_calib(self.task_core.target, X_test, y_classes, classifier_data)
+
+
+
 
 # a list of pairs indicating the slices of the data containing full seizures
 # e.g. [(0, 5), (6, 10)] indicates two ranges of seizures
@@ -162,7 +202,6 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
     # generate (X, <y>, <latency>) per channel
     def process_raw_data(mat_data, ispreictal):
         start = time.get_seconds()
-        print 'Loading data',
         X = []
         y = []
         latencies = []
@@ -179,23 +218,23 @@ def parse_input_data(data_dir, target, data_type, pipeline, gen_ictal=False):
 
             # TODO:xf1280@gmail.com
             data = data[0,0]
-            print(type(data))
-            print(data.dtype)
-            #print(data['data'])
-            data = data['data']
-            transformed_data = pipeline.apply(data)
-            #print 'transformed data',transformed_data
-            if ispreictal:
-                # this is preictal
-                y.append(1)
+            datas = data['data']
+            sz = datas.shape
+            for i in range(drate):
+                data = datas[:,i*(sz[1]//drate):(i+1)*(sz[1]//drate)]
+                transformed_data = pipeline.apply(data)
+                if ispreictal:
+                    # this is preictal
+                    y.append(1)
+                else:
+                    # this is interictal
+                    y.append(0)
 
-            elif y is not None:
-                # this is interictal
-                y.append(0)
+                X.append(transformed_data)
 
-            X.append(transformed_data)
-            prev_data = data
-            #print X,y
+                prev_data = data
+
+
         print '(%ds)' % (time.get_seconds() - start)
 
         X = np.array(X)
@@ -236,19 +275,30 @@ def flatten(data):
 
 # split up ictal and interictal data into training set and cross-validation set
 def prepare_training_data(ictal_data, interictal_data, cv_ratio):
-    print 'Preparing training data ...',
     ictal_X, ictal_y = flatten(ictal_data.X), ictal_data.y
     interictal_X, interictal_y = flatten(interictal_data.X), interictal_data.y
-
+    sz = ictal_X.shape
+    num = sz[0]
+    num2 = (interictal_X.shape)[0]
+    sub = random.sample(range(0,interictal_X.shape[0]),min(num*3,num2))
+    #sub = random.sample(range(0,interictal_X.shape[0]),num)
+    interictal_X = interictal_X[sub,:]
+    interictal_y = interictal_y[sub]
+    #chop data
+    print "chop"
+    print interictal_X.shape
+    print ictal_X.shape
     # split up data into training set and cross-validation set for both seizure and early sets
     ictal_X_train, ictal_y_train, ictal_X_cv, ictal_y_cv = split_train_random(ictal_X, ictal_y, cv_ratio)
     interictal_X_train, interictal_y_train, interictal_X_cv, interictal_y_cv = split_train_random(interictal_X, interictal_y, cv_ratio)
+    print interictal_X_train.shape
 
     def concat(a, b):
         return np.concatenate((a, b), axis=0)
 
     X_train = concat(ictal_X_train, interictal_X_train)
     y_train = concat(ictal_y_train, interictal_y_train)
+    print X_train.shape
     X_cv = concat(ictal_X_cv, interictal_X_cv)
     y_cv = concat(ictal_y_cv, interictal_y_cv)
 
@@ -336,7 +386,19 @@ def train(classifier, X_train, y_train, X_cv, y_cv, y_classes):
     print 'Dim', 'X', np.shape(X_train), 'y', np.shape(y_train), 'X_cv', np.shape(X_cv), 'y_cv', np.shape(y_cv)
 
     start = time.get_seconds()
-    classifier.fit(X_train, y_train)
+    total = y_train.shape[0]
+
+
+    ictalnum = sum(y_train)
+    interictalnum = total - ictalnum
+    print ictalnum
+    print interictalnum
+
+    weight = np.concatenate((interictalnum/ictalnum*np.ones(ictalnum),np.ones(interictalnum)))
+    print weight
+
+
+    classifier.fit(X_train, y_train, sample_weight=weight)
     print "Scoring..."
     S= score_classifier_auc(classifier, X_cv, y_cv, y_classes)
     score = S
@@ -353,13 +415,23 @@ def train_all_data(classifier, X_train, y_train, X_cv, y_cv):
     y = np.concatenate((y_train, y_cv), axis=0)
     print 'Dim', np.shape(X), np.shape(y)
     start = time.get_seconds()
-    print "In the train"
-    print X
-    print y
-    classifier.fit(X, y)
-
+    total = (y.shape)[0]
+    ictalnum = sum(y)
+    interictalnum = total - ictalnum
+    print ictalnum
+    print interictalnum
+    weight = np.concatenate((interictalnum/ictalnum*np.ones(ictalnum),np.ones(interictalnum)))
+    print weight
+    classifier.fit(X, y, sample_weight= weight)
+    #np.set_printoptions(threshold=np.nan)
     elapsedSecs = time.get_seconds() - start
     print "t=%ds" % int(elapsedSecs)
+
+
+
+
+
+
 
 # sub mean divide by standard deviation
 def normalize_data(X_train, X_cv):
@@ -393,6 +465,35 @@ def train_classifier(classifier, data, use_all_data=False, normalize=False):
         }
 
 
+
+# depending on input train either for predictions or for cross-validation
+def train_classifier_with_calib(classifier, data, use_all_data=False, normalize=False):
+    X_train = data.X_train
+    y_train = data.y_train
+    X_cv = data.X_cv
+    y_cv = data.y_cv
+    if normalize:
+        X_train, X_cv = normalize_data(X_train, X_cv)
+    if not use_all_data:
+        ir = IR()
+        score, S = train(classifier, X_train, y_train, X_cv, y_cv, data.y_classes)
+        predictions_proba = classifier.predict_proba(X_cv)
+        proba = predictions_proba[:,1];
+        ir.fit_transform(proba,y_cv)
+        print ir
+        return {
+            'classifier': classifier,
+            'score': score,
+            'S_auc': S,
+            'IR':ir,
+            'prange':[np.amin(proba),np.amax(proba)]
+        }
+    else:
+        train_all_data(classifier, X_train, y_train, X_cv, y_cv)
+        return {
+            'classifier': classifier
+        }
+
 # convert the output of classifier predictions into (Seizure, Early) pair
 def translate_prediction(prediction, y_classes):
     #print len(prediction)
@@ -418,24 +519,68 @@ def translate_prediction(prediction, y_classes):
     #else:
     #    raise NotImplementedError()
 
-    S = prediction[0]
+    S = prediction[1]
     return S
 
 # use the classifier and make predictions on the test data
 def make_predictions(target, X_test, y_classes, classifier_data):
     classifier = classifier_data.classifier
     predictions_proba = classifier.predict_proba(X_test)
-
+    #np.set_printoptions(threshold=np.nan)
+    proba = predictions_proba[:,1];
+    print proba
+    proba = proba.reshape((proba.size//drate,drate))
+    print proba
+    proba = proba.mean(axis=-1)
     lines = []
-    for i in range(len(predictions_proba)):
-        p = predictions_proba[i]
-        S = translate_prediction(p, y_classes)
-        lines.append('%s_test_segment_%d.mat,%.15f' % (target, i+1, S))
+    print proba
+    #proba = proba - proba.mean(axis=0)+0.5
+    #for i in range(len(predictions_proba)):
+    for i in range(len(proba)):
+        #p = [proba[i],0]
+        #S = translate_prediction(p, y_classes)
+        S = proba[i]
+        lines.append('%s_test_segment_%04d.mat,%.15f' % ( target, i+1, S))
 
     return {
         'data': '\n'.join(lines)
     }
 
+
+
+# use the classifier and make predictions on the test data
+def make_predictions_with_calib(target, X_test, y_classes, classifier_data):
+    classifier = classifier_data.classifier
+    ir = classifier_data.IR
+    predictions_proba = classifier.predict_proba(X_test)
+    #np.set_printoptions(threshold=np.nan)
+    proba = predictions_proba[:,1];
+    print proba
+    print "transformed"
+    lowValue = classifier_data.prange[0]
+    highValue = classifier_data.prange[1]
+    lowIndices = proba <= lowValue
+    highIndices = proba >= highValue
+    proba[lowIndices] = lowValue + 0.001
+    proba[highIndices] = highValue - 0.001
+    proba = ir.transform(proba)
+    print proba
+    proba = proba.reshape((proba.size//drate,drate))
+    print proba
+    proba = proba.mean(axis=-1)
+    lines = []
+    print proba
+    #proba = proba - proba.mean(axis=0)+0.5
+    #for i in range(len(predictions_proba)):
+    for i in range(len(proba)):
+        #p = [proba[i],0]
+        #S = translate_prediction(p, y_classes)
+        S = proba[i]
+        lines.append('%s_test_segment_%04d.mat,%.15f' % ( target, i+1, S))
+
+    return {
+        'data': '\n'.join(lines)
+    }
 
 # the scoring mechanism used by the competition leaderboard
 def score_classifier_auc(classifier, X_cv, y_cv, y_classes):
@@ -445,7 +590,6 @@ def score_classifier_auc(classifier, X_cv, y_cv, y_classes):
 
     for i in range(len(predictions)):
         p = predictions[i]
-        print p
         S= translate_prediction(p, y_classes)
         S_predictions.append(S)
 

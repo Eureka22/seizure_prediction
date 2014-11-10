@@ -29,12 +29,31 @@ class FFT:
     def apply(self, data):
         axis = data.ndim - 1
         fft = np.fft.rfft(data, axis=axis)
-        fft2 = np.ndarray(shape=(16,200), dtype=float, order='F')
-        for i in range(16):
-            for j in range(200):
-                fft2[i,j] = np.sum(fft[i,600*j: 600*(j+1)])
-        return fft2
-        #return fft
+        #fft2 = np.ndarray(shape=(16,200), dtype=float, order='F')
+        #for i in range(16):
+        #    for j in range(200):
+        #        fft2[i,j] = np.sum(fft[i,600*j: 600*(j+1)])
+        #return fft2
+        return fft
+
+
+class TimeAliasing:
+    """
+    Time aliasing
+    """
+    def get_name(self):
+        return "time_aliasing"
+    def apply(self,data):
+        axis = data.ndim - 1
+        sz = data.shape
+        sz2 = sz[1]-(sz[1]%400)
+        data = data[:,0:sz2]
+        sz = data.shape
+        newsz = (sz[0],400,sz[1]//400)
+        data = data.reshape(newsz)
+        data = data.sum(axis=-1)
+        return data
+
 
 class RFFT:
     """
@@ -45,16 +64,12 @@ class RFFT:
     def apply(self,data):
         axis = data.ndim - 1
         sz = data.shape
-        print sz
         sz2 = sz[1] - (sz[1]%400)
-        print sz2
         data = data[:,0:sz2]
         sz = data.shape
         newsz = (sz[0],400,sz[1]//400)
-        print newsz
         data = data.reshape(newsz)
-        data = data.mean(axis=1)
-        print data.shape
+        data = data.sum(axis=1)
         fft = np.fft.rfft(data,axis = axis)
         return fft
 
@@ -551,7 +566,7 @@ class TimeFreqCorrelation:
 
     def apply(self, data):
         data1 = TimeCorrelation(self.max_hz, self.scale_option).apply(data)
-        data2 = FreqCorrelation(self.start, self.end, self.scale_option).apply(data)
+        data2 = FreqCorrelation(self.start, self.end, self.scale_option, with_fft=True).apply(data)
         assert data1.ndim == data2.ndim
         return np.concatenate((data1, data2), axis=data1.ndim-1)
 
