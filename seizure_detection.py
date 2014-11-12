@@ -6,9 +6,10 @@ from common.data import CachedDataLoader, makedirs
 from common.pipeline import Pipeline
 from seizure.transforms import TimeAliasing,RFFT, FFT, Slice, Magnitude, Log10, FFTWithTimeFreqCorrelation, MFCC, Resample, Stats, \
     DaubWaveletStats, TimeCorrelation, FreqCorrelation, TimeFreqCorrelation
-from seizure.tasks import TaskCore, CrossValidationScoreTask, MakePredictionsTask, TrainClassifierTask, TrainClassifierwithCalibTask, MakePredictionswithCalibTask
+from seizure.tasks import TaskCore, CrossValidationScoreTask, MakePredictionsTask, TrainClassifierTask, TrainClassifierwithCalibTask, MakePredictionswithCalibTask, CrossValidationScoreFullTask
 
 from seizure.scores import get_score_summary, print_results
+from sklearn import metrics
 
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, ExtraTreesClassifier, \
     GradientBoostingClassifier
@@ -89,17 +90,17 @@ def run_seizure_detection(build_target):
     ]
     classifiers = [
         # NOTE(mike): you can enable multiple classifiers to run them all and compare results
-        # (RandomForestClassifier(n_estimators=50, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf50mss1Bfrs0'),
+         (RandomForestClassifier(n_estimators=3, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3mss1Bfrs0'),
         # (RandomForestClassifier(n_estimators=150, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf150mss1Bfrs0'),
         # (RandomForestClassifier(n_estimators=300, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf300mss1Bfrs0'),
-         (RandomForestClassifier(n_estimators=3000, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3000mss1Bfrs0'),
+        # (RandomForestClassifier(n_estimators=3000, min_samples_split=1, bootstrap=False, n_jobs=4, random_state=0), 'rf3000mss1Bfrs0'),
         # (GaussianNB(),'gbn'),
         # (BernoulliRBM(n_components=100),'dbn'),
-        # (SVC(),'svc'),
+        # (SVC(probability = True),'svc100'),
         # (LDA(),'lda'),
 
     ]
-    cv_ratio = 0.25
+    cv_ratio = 0.5
 
     def should_normalize(classifier):
         clazzes = [LogisticRegression]
@@ -182,6 +183,33 @@ def run_seizure_detection(build_target):
 
 
 
+    def do_cross_validation_full():
+        summaries = []
+        print "ok"
+        for pipeline in pipelines:
+            for (classifier, classifier_name) in classifiers:
+                print 'Using pipeline %s with classifier %s' % (pipeline.get_name(), classifier_name)
+                scores = []
+                S_scores = []
+                E_scores = []
+                y_cv = []
+                pred = []
+                for target in targets:
+                    print 'Processing %s (classifier %s)' % (target, classifier_name)
+                    task_core = TaskCore(cached_data_loader=cached_data_loader, data_dir=data_dir,
+                                         target=target, pipeline=pipeline,
+                                         classifier_name=classifier_name, classifier=classifier,
+                                         normalize=should_normalize(classifier), gen_ictal=False,
+                                         cv_ratio=cv_ratio)
+
+                    data = CrossValidationScoreFullTask(task_core).run()
+                    y_cv = np.concatenate((y_cv,data.y_cv),axis = -1);
+                    pred = np.concatenate((pred,data.pred),axis = -1);
+                print y_cv
+                print pred
+                fpr,tpr,thresholds = metrics.roc_curve(y_cv,pred,pos_label = 1)
+                print 'AUC'
+                print metrics.auc(fpr,tpr)
 
 
 
@@ -204,7 +232,6 @@ def run_seizure_detection(build_target):
 
                     data = CrossValidationScoreTask(task_core).run()
                     score = data.score
-
                     scores.append(score)
 
                     print '%.3f' % score, 'S=%.4f' % data.S_auc
@@ -222,6 +249,9 @@ def run_seizure_detection(build_target):
 
             print_results(summaries)
 
+
+
+
     if build_target == 'cv':
         do_cross_validation()
     elif build_target == 'train_model':
@@ -230,6 +260,8 @@ def run_seizure_detection(build_target):
         train_full_model(make_predictions=True)
     elif build_target == 'make_predictions_with_calib':
         train_model_with_calib(make_predictions = True)
+    elif build_target == 'cv_full':
+        do_cross_validation_full()
     else:
         raise Exception("unknown build target %s" % build_target)
 

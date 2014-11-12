@@ -93,6 +93,19 @@ class CrossValidationScoreTask(Task):
         return classifier_data
 
 
+class CrossValidationScoreFullTask(Task):
+    """
+    Run a classifier over a training set, and give a cross-validation score.
+    """
+    def filename(self):
+        return 'score_%s_%s_%s' % (self.task_core.target, self.task_core.pipeline.get_name(), self.task_core.classifier_name)
+
+    def load_data(self):
+        data = TrainingDataTask(self.task_core).run()
+        classifier_data = train_classifier(self.task_core.classifier, data, normalize=self.task_core.normalize, return_data=True)
+        return classifier_data
+
+
 class TrainClassifierTask(Task):
     """
     Run a classifier over the complete data set (training data + cross-validation data combined)
@@ -398,7 +411,8 @@ def train(classifier, X_train, y_train, X_cv, y_cv, y_classes):
     print weight
 
 
-    classifier.fit(X_train, y_train, sample_weight=weight)
+    #classifier.fit(X_train, y_train, sample_weight=weight)
+    classifier.fit(X_train,y_train)
     print "Scoring..."
     S= score_classifier_auc(classifier, X_cv, y_cv, y_classes)
     score = S
@@ -444,7 +458,7 @@ def normalize_data(X_train, X_cv):
     return X_train, X_cv
 
 # depending on input train either for predictions or for cross-validation
-def train_classifier(classifier, data, use_all_data=False, normalize=False):
+def train_classifier(classifier, data, use_all_data=False, normalize=False, return_data = False):
     X_train = data.X_train
     y_train = data.y_train
     X_cv = data.X_cv
@@ -453,11 +467,17 @@ def train_classifier(classifier, data, use_all_data=False, normalize=False):
         X_train, X_cv = normalize_data(X_train, X_cv)
     if not use_all_data:
         score, S = train(classifier, X_train, y_train, X_cv, y_cv, data.y_classes)
-        return {
-            'classifier': classifier,
-            'score': score,
-            'S_auc': S,
-        }
+        if return_data:
+            return {
+                    'y_cv':y_cv.reshape((y_cv.size//drate,drate)).mean(axis=-1),
+                    'pred':classifier.predict_proba(X_cv)[:,1].reshape((y_cv.size//drate,drate)).mean(axis=-1)
+                    }
+        else:
+            return {
+                'classifier': classifier,
+                'score': score,
+                'S_auc': S,
+            }
     else:
         train_all_data(classifier, X_train, y_train, X_cv, y_cv)
         return {
@@ -480,6 +500,7 @@ def train_classifier_with_calib(classifier, data, use_all_data=False, normalize=
         predictions_proba = classifier.predict_proba(X_cv)
         proba = predictions_proba[:,1];
         ir.fit_transform(proba,y_cv)
+        print proba
         print ir
         return {
             'classifier': classifier,
@@ -570,6 +591,8 @@ def make_predictions_with_calib(target, X_test, y_classes, classifier_data):
     proba = proba.mean(axis=-1)
     lines = []
     print proba
+
+
     #proba = proba - proba.mean(axis=0)+0.5
     #for i in range(len(predictions_proba)):
     for i in range(len(proba)):
